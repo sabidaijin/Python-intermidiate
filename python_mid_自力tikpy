@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+
+class TicTacToe:
+    
+    def __init__(self, n):
+        # サイズは入力と同じ値にする。stringだと扱いにくいのでintに変換する。
+        self.size = int(n)
+        # 1回目のプレーヤーは1番だから、最初から2を入れておく
+        self.next = 2  # 最初はプレーヤー2から始める
+        # ゲームの進行中として0を入れておく
+        self.state = 0
+
+        # ゲーム盤の状態を表すリストを生成
+        # リスト内包表記を使用して、すべてのセルを0で初期化
+        self.board = [0] * (self.size ** 2)
+
+        # 勝者を表す変数を初期化
+        self.winner = 0
+
+        # 判定結果を表す辞書を初期化。
+        self.judge = {
+            "vertical": [0] * self.size,
+            "horizon": [0] * self.size,
+            "diagonal": [0, 0]
+        }
+
+    # 辞書型の選択にも対応できるように、yのデフォルトを設定しておく
+    def play(self, player, x, y=None):
+        # もしも指定されたところがサイズよりも内側だったら入力
+        # 諸々チェック
+        if self.state != 0:
+            raise PermissionError('GAME IS OVER!!')
+			
+        if not player in [1, 2]:	# プレイヤーIDが変
+            raise PermissionError('you are NOT a player.')
+		
+        if player != self.__next:			# プレイヤーが違う
+            raise PermissionError(f'next turn is player {self.__next}')
+		
+        if y is None:
+            y = x // self.size
+            x %= self.size
+            # セルの位置にプレイヤーのマークを設定
+            cell_index = x + y * self.size
+            if self.board[cell_index] == 0:
+                self.board[cell_index] = player
+                self.next = 3 - self.next  # プレイヤーを切り替える
+                self.judge_game()  # ゲームの判定を行う
+            else:
+                print("指定されたセルはすでに埋まっています。再入力してください。")
+        else:
+            print("セルの指定が範囲外です。再入力してください。")
+
+    def print_board(self, stat: bool = False):
+        """現在の盤面の状態をターミナルに出力する。
+
+        Args:
+            stat: True なら、判定結果も出力する。
+        Returns:
+            None
+        Raises:
+            None
+        """
+        pad = 4  # 各セルを整列させるためのパディング
+        hdiv = ' ' * pad + '+---' * self.size + '+'
+
+        print()
+
+        if stat:
+            # 判定結果を表示
+            print(' ' * (pad - 2), end='')
+            print('%d' % self.judge["diagonal"][0], end='')
+            for x in range(self.size):
+                print('   %d' % self.judge["vertical"][x], end='')
+                print('   %d' % self.judge["diagonal"][1])
+        
+        for y in range(self.size):
+            print(hdiv)
+            print(' ' * pad + '|', end='')
+            for x in range(self.size):
+                mark = self.get_mark(self.board[x + y * self.size])
+                print(' %s |' % mark, end='')
+            if stat:
+                print(' %d' % self.judge["horizon"][y], end='')
+            print()
+        print(hdiv)
+        print()
+
+    def is_vacant(self, x: int, y: int = None):
+        """盤上の空きを確認。
+
+        Args:
+            x, y: セルのアドレス (左上が [0, 0])、もしくはインデックス (左上が 0)
+        Returns:
+            セルが空であれば True、それ以外は False。
+        Raises:
+            None
+        """
+        if y is None:
+            y = x // self.size
+            x %= self.size
+
+        if self.state == 0:
+            return self.board[x + y * self.size] == 0
+        else:
+            return False
+
+    def judge_game(self):
+        if self.state == 0:  # ゲーム終了後は判定しない
+            # 各方向のチェック用にサブルーチンを定義
+            def check_linestate_hz(direction: int):
+                """水平/垂直方向のチェック用サブルーチン。結果は judge に保存される。
+
+                Args:
+                    direction: 方向。0=垂直方向、2=水平方向
+                Returns:
+                    None
+                """
+                for p0 in range(self.size):
+                    if self.judge[direction][p0] == 0:  # ラインの状態が未確定
+                        s1 = s2 = 0
+
+                        for p1 in range(self.size):
+                            if direction == 0:  # 垂直方向
+                                x = p0
+                                y = p1
+                            else:  # 水平方向
+                                x = p1
+                                y = p0
+
+                            c = self.board[x + y * self.size]
+                            if c == 1:
+                                s1 += 1
+                            elif c == 2:
+                                s2 += 1
+
+                        if s1 and s2:
+                            self.judge[direction][p0] = 1  # 引き分け
+                        elif s1 == self.size:
+                            self.judge[direction][p0] = 2  # 勝負あり
+                            self.state = 2  # game over
+                            self.winner = 1
+                        elif s2 == self.size:
+                            self.judge[direction][p0] = 2  # 勝負あり
+                            self.state = 2  # game over
+                            self.winner = 2
+
+            # 斜め方向のチェック用サブルーチン
+            def check_linestate_x(direction: int):
+                """斜め方向のチェック用サブルーチン。結果は judge に保存される。
+
+                Args:
+                    direction: 方向。0=左上から右下 \、1=右上から左下 /
+                Returns:
+                    None
+                """
+                if self.judge["diagonal"][direction] == 0:  # ラインの状態が未確定
+                    s1 = s2 = 0
+
+                    for x in range(self.size):
+                        if direction == 0:  # \
+                            y = x
+                        else:  # /
+                            y = self.size - x - 1
+
+                        c = self.board[x + y * self.size]
+                        if c == 1:
+                            s1 += 1
+                        elif c == 2:
+                            s2 += 1
+
+                    if s1 and s2:
+                        self.judge["diagonal"][direction] = 1  # 引き分け
+                    elif s1 == self.size:
+                        self.judge["diagonal"][direction] = 2  # 勝負あり
+                        self.state = 2  # game over
+                        self.winner = 1
+                    elif s2 == self.size:
+                        self.judge["diagonal"][direction] = 2  # 勝負あり
+                        self.state = 2  # game over
+                        self.winner = 2
+	
+            # 各方向のチェックここでチェックをしている
+            check_linestate_hz(0)  # 垂直方向
+            check_linestate_hz(2)  # 水平方向
+            check_linestate_x(0)  # \
+            check_linestate_x(1)  # /
+
+            # 引き分けのチェック - 全てのラインが引き分けなら、ゲームも引き分け
+            if all(val == 1 for val in self.judge["diagonal"]) and all(
+                val == 1 for val in self.judge["vertical"]
+            ) and all(val == 1 for val in self.judge["horizon"]):
+                self.state = 1  # 引き分け
+
+    def get_mark(self, player):
+        """プレーヤーを表すマークを取得する。"""
+        return "X" if player == 1 else "O"
+from random import randint
+
+# # テスト用コード
+# if __name__ == '__main__':
+#     # テストコードはこちらから実行できます
+#     n = 3
+
+#     while n >= 3:
+#         game = TicTacToe(n)
+#         nn = n ** 2
+
+#         for i in range(nn):
+#             e = [idx for idx, val in enumerate(game.board) if val == 0]
+#             c = e[randint(0, len(e) - 1)]
+#             print(f'#{i+1}: {game.get_mark(game.next)} = {c+1}')
+
+#             game.play(game.next, c)
+#             game.print_board(stat=True)
+
+#             if game.state == 1:
+#                 print('Result: DRAW')
+#                 break
+#             elif game.state == 2:
+#                 print('Result: Player %d (%s) WON' % (game.winner, game.get_mark(game.winner)))
+#                 break
+
+#         while True:
+#             try:
+#                 n = int(input('\n次は何目並べにしますか?（3未満で終了）: '))
+#                 break
+#             except:
+#                 print('整数を入力してください。')
